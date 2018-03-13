@@ -1,7 +1,9 @@
 
 # SO-Net
 **SO-Net: Self-Organizing Network for Point Cloud Analysis.** CVPR 2018, Salt Lake City, USA
+
 Jiaxin Li, Ben M. Chen, Gim Hee Lee
+
 National University of Singapore
 
 *More codes are coming ...*
@@ -94,6 +96,6 @@ python3 train.py
 This repository is released under MIT License (see LICENSE file for details).
 
 ## TODO
-- [] Optional dependency for numba
-- [] On-the-fly point sampling from meshes
-- [] Upload prepared datasets
+* [] Optional dependency for numba
+* [] On-the-fly point sampling from meshes
+* [] Upload prepared datasets
