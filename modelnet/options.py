@@ -30,7 +30,7 @@ class Options():
         self.parser.add_argument('--normalization', type=str, default='batch', help='normalization function: batch, instance')
 
         self.parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-        self.parser.add_argument('--dropout', type=float, default=0.6, help='probability of an element to be zeroed')
+        self.parser.add_argument('--dropout', type=float, default=0.7, help='probability of an element to be zeroed')
         self.parser.add_argument('--node_num', type=int, default=64, help='som node number')
         self.parser.add_argument('--k', type=int, default=3, help='k nearest neighbor')
         self.parser.add_argument('--pretrain', type=str, default=None, help='pre-trained encoder dict path')

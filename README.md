@@ -70,32 +70,28 @@ http://localhost:8097
 ### Application - Classification
 Point cloud classification can be done on ModelNet40/10 and SHREC2016 dataset. Besides setting `--dataset` and `--dataroot`, `--classes` should be set to the desired class number, i.e, 55 for SHREC2016, 40 for ModelNet40 and 10 for ModelNet10.
 ```
-cd modelnet/
-python3 train.py
+python3 modelnet/train.py
 ```
 ### Application - Shape Retrieval
 The training of shape retrieval is the same as classification, while at testing phase, the score vector (length 55 for SHREC2016) is regarded as the feature vector. We calculate the L2 feature distance between each shape in the test set and all shapes in the same predicted category from the test set (including itself). The corresponding retrieval list is constructed by sorting these shapes according to the feature distances.
 ```
-cd shrec16/
-python3 train.py
+python3 shrec16/train.py
 ```
 ### Application - Part Segmentation
 Segmentation is formulated as a per-point classification problem.
 ```
-cd part_seg/
-python3 train.py
+python3 part_seg/train.py
 ```
 ### Application - Auto-encoder
 An input point cloud is compressed into a feature vector, based on which a point cloud is reconstructed to minimize the Chamfer loss. Supports ModelNet, ShapeNetPart, SHREC2016.
 ```
-cd autoencoder/
-python3 train.py
+python3 autoencoder/train.py
 ```
 
 ## License
 This repository is released under MIT License (see LICENSE file for details).
 
 ## TODO
-* [] Optional dependency for numba
+* [] Optional dependency for numba, faiss
 * [] On-the-fly point sampling from meshes
 * [] Upload prepared datasets
