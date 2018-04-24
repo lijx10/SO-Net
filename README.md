@@ -1,6 +1,6 @@
 
 # SO-Net
-**SO-Net: Self-Organizing Network for Point Cloud Analysis.** CVPR 2018, Salt Lake City, USA
+**[SO-Net: Self-Organizing Network for Point Cloud Analysis.](https://arxiv.org/abs/1803.04249)** CVPR 2018, Salt Lake City, USA
 
 Jiaxin Li, Ben M. Chen, Gim Hee Lee
 
@@ -38,10 +38,10 @@ Requirements:
 Optional dependency:
  - Faiss [GPU support](https://github.com/facebookresearch/faiss/blob/master/INSTALL.md) - required by auto-encoder
  - [numba](https://numba.pydata.org/) - required by 3-layer SO-Net and accelerated kNN search. A summary of installing/using numba without conda:
- 1\. [Install llvm-5.0]([https://askubuntu.com/questions/905205/installing-clang-5-0-and-using-c17](https://askubuntu.com/questions/905205/installing-clang-5-0-and-using-c17))
- 2\. Build and install [llvmlite]([https://pypi.python.org/pypi/numba](https://pypi.python.org/pypi/numba))
- 3\. `sudo pip3 install numba`
- 4\. Set environment variables, example:
+ 1. [Install llvm-5.0]([https://askubuntu.com/questions/905205/installing-clang-5-0-and-using-c17](https://askubuntu.com/questions/905205/installing-clang-5-0-and-using-c17))
+ 2. Build and install [llvmlite]([https://pypi.python.org/pypi/numba](https://pypi.python.org/pypi/numba))
+ 3. `sudo pip3 install numba`
+ 4. Set environment variables, example:
 ```
 export LLVM_CONFIG=/usr/lib/llvm-5.0/bin/llvm-config  
 export NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
