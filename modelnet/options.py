@@ -39,7 +39,7 @@ class Options():
         self.parser.add_argument('--pretrain_lr_ratio', type=float, default=1, help='learning rate ratio between pretrained encoder and classifier')
 
         self.parser.add_argument('--som_k', type=int, default=9, help='k nearest neighbor of SOM nodes searching on SOM nodes')
-        self.parser.add_argument('--som_k_type', type=str, default='center', help='avg / center')
+        self.parser.add_argument('--som_k_type', type=str, default='avg', help='avg / center')
 
         self.parser.add_argument('--random_pc_dropout_lower_limit', type=float, default=1, help='keep ratio lower limit')
         self.parser.add_argument('--bn_momentum', type=float, default=0.1, help='normalization momentum, typically 0.1. Equal to (1-m) in TF')
