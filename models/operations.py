@@ -121,13 +121,14 @@ def indexed_max(data, index, max_idx, max_val):
 
 
 class MaskedMax:
-    def __init__(self, som_node_number):
+    def __init__(self, som_node_number, gpu_id):
         self.cpu_masked_max = MaskedMaxThread(thread_num=8)
         self.M = som_node_number
 
         # initialization for indexed_max
-        self.max_idx = torch.IntTensor(8, 384, self.M).zero_().cuda()
-        self.max_val = torch.FloatTensor(8, 384, self.M).fill_(-100).cuda()
+        self.device = torch.device("cuda:%d"%gpu_id)
+        self.max_idx = torch.IntTensor(8, 384, self.M).zero_().to(self.device)
+        self.max_val = torch.FloatTensor(8, 384, self.M).fill_(-100).to(self.device)
 
     def compute(self, data, min_idx, mask):
         '''
@@ -142,20 +143,22 @@ class MaskedMax:
         B = data.size()[0]
         C = data.size()[1]
 
-        data_cuda = get_devicendarray_float32(data)
-        index_cuda = get_devicendarray_int32(min_idx.type(torch.cuda.IntTensor))
-        max_idx_cuda = get_devicendarray_int32(self.max_idx.resize_((B, C, self.M)).zero_())
-        max_val_cuda = get_devicendarray_float32(self.max_val.resize_((B, C, self.M)).fill_(-1000))
+        data_cuda = get_devicendarray_float32(data.data)
+        index_cuda = get_devicendarray_int32(min_idx.int().data)
+        max_idx_cuda = get_devicendarray_int32(self.max_idx.resize_((B, C, self.M)).zero_().data)
+        max_val_cuda = get_devicendarray_float32(self.max_val.resize_((B, C, self.M)).fill_(-1000).data)
 
         indexed_max[B, C](data_cuda, index_cuda, max_idx_cuda, max_val_cuda)
-        gather_index = self.max_idx.type(torch.cuda.LongTensor)
+        gather_index = self.max_idx.to(self.device, torch.int64)
         # ============= cuda ===================
 
         # ============= cpu ===================
-        # gather_index_cpu = self.cpu_masked_max.compute(data.cpu(), mask.cpu()).cuda()
+        # gather_index_cpu = self.cpu_masked_max.compute(data.cpu(), mask.cpu()).to(self.device)
         # ============= cpu ===================
 
         # debug
+        # print(self.max_idx.device)
+        # print(gather_index.device)
         # print(torch.min(gather_index - gather_index_cpu))
         # print(torch.max(gather_index - gather_index_cpu))
 
@@ -206,7 +209,7 @@ def unroll_decenter_conv2d_valid(data, result, kernel_size, half_kernel_size):
                 data[b, c, i + kx, j + ky] - data[b, c, i + half_kernel_size, j + half_kernel_size]
 
 
-def unroll_decenter(coordinate, kernel_size, padding):
+def unroll_decenter(coordinate, kernel_size, padding, gpu_id):
     '''
     if there is padding, it is "SAME" convolution, result is KHxKW
     if no padding, it is "VALID" convolution, result is K(H-K/2) x K(W-K/2)
@@ -220,6 +223,8 @@ def unroll_decenter(coordinate, kernel_size, padding):
     H = coordinate.size()[2]
     W = coordinate.size()[3]
 
+    device = torch.device("cuda:%d"%gpu_id)
+
     if (padding is not None) and (padding >= 1):
         # ensure SAME style
         assert math.floor(kernel_size/2) == padding
@@ -227,8 +232,8 @@ def unroll_decenter(coordinate, kernel_size, padding):
         coordinate_padded = F.pad(coordinate, (padding, padding, padding, padding), mode='constant', value=0)
         coordinate_padded_cuda = get_devicendarray_float32(coordinate_padded.data)
 
-        result = torch.FloatTensor(B, C, kernel_size * H, kernel_size * W).cuda().zero_()
-        result_cuda = get_devicendarray_float32(result)
+        result = torch.FloatTensor(B, C, kernel_size * H, kernel_size * W).to(device).zero_()
+        result_cuda = get_devicendarray_float32(result.data)
 
         unroll_decenter_conv2d_same[(B, C), (H, W)](coordinate_padded_cuda, result_cuda, kernel_size, padding)
 
@@ -243,8 +248,8 @@ def unroll_decenter(coordinate, kernel_size, padding):
 
         coordinate_cuda = get_devicendarray_float32(coordinate.data)
 
-        result = torch.FloatTensor(B, C, kernel_size * (H-2*half_kernel_size), kernel_size * (W-2*half_kernel_size)).cuda().zero_()
-        result_cuda = get_devicendarray_float32(result)
+        result = torch.FloatTensor(B, C, kernel_size * (H-2*half_kernel_size), kernel_size * (W-2*half_kernel_size)).to(device).zero_()
+        result_cuda = get_devicendarray_float32(result.data)
 
         unroll_decenter_conv2d_valid[(B, C), (H-2*half_kernel_size, W-2*half_kernel_size)](coordinate_cuda, result_cuda, kernel_size, half_kernel_size)
 
@@ -291,7 +296,7 @@ def unroll_deaverage_conv2d_same(data, result, kernel_size, padding, avg_matrix)
                 data[b, c, i + kx, j + ky] - avg_matrix[b, c, i + padding, j + padding]
 
 
-def unroll_average(coordinate, kernel_size, padding):
+def unroll_average(coordinate, kernel_size, padding, gpu_id):
     '''
     if there is padding, it is "SAME" convolution, result is KHxKW
     if no padding, it is "VALID" convolution, result is K(H-K/2) x K(W-K/2)
@@ -305,6 +310,8 @@ def unroll_average(coordinate, kernel_size, padding):
     H = coordinate.size()[2]
     W = coordinate.size()[3]
 
+    device = torch.device("cuda:%d" % gpu_id)
+
     if (padding is not None) and (padding >= 1):
         # ensure SAME style
         assert math.floor(kernel_size / 2) == padding
@@ -312,11 +319,11 @@ def unroll_average(coordinate, kernel_size, padding):
         coordinate_padded = F.pad(coordinate, (padding, padding, padding, padding), mode='constant', value=0)
         coordinate_padded_cuda = get_devicendarray_float32(coordinate_padded.data)
 
-        result = torch.FloatTensor(B, C, kernel_size * H, kernel_size * W).cuda().zero_()
-        result_cuda = get_devicendarray_float32(result)
+        result = torch.FloatTensor(B, C, kernel_size * H, kernel_size * W).to(device).zero_()
+        result_cuda = get_devicendarray_float32(result.data)
 
-        avg_matrix_padded = torch.FloatTensor(coordinate_padded.size()).cuda().zero_()
-        avg_matrix_padded_cuda = get_devicendarray_float32(avg_matrix_padded)
+        avg_matrix_padded = torch.FloatTensor(coordinate_padded.size()).to(device).zero_()
+        avg_matrix_padded_cuda = get_devicendarray_float32(avg_matrix_padded.data)
 
         unroll_deaverage_conv2d_same[(B, C), (H, W)](coordinate_padded_cuda, result_cuda, kernel_size, padding, avg_matrix_padded_cuda)
 
@@ -333,8 +340,8 @@ def unroll_average(coordinate, kernel_size, padding):
         # coordinate_cuda = get_devicendarray_float32(coordinate.data)
         #
         # result = torch.FloatTensor(B, C, kernel_size * (H - 2 * half_kernel_size),
-        #                            kernel_size * (W - 2 * half_kernel_size)).cuda().zero_()
-        # result_cuda = get_devicendarray_float32(result)
+        #                            kernel_size * (W - 2 * half_kernel_size)).to(device).zero_()
+        # result_cuda = get_devicendarray_float32(result.data)
         #
         # unroll_decenter_conv2d_valid[(B, C), (H - 2 * half_kernel_size, W - 2 * half_kernel_size)](
         #     coordinate_cuda, result_cuda, kernel_size, half_kernel_size)
@@ -351,7 +358,7 @@ def unroll_average(coordinate, kernel_size, padding):
 
 # ================================== feature Bx(3+C)xHxW ======================================
 class UnrollFeature:
-    def __init__(self, H, W, kernel_size, padding=0):
+    def __init__(self, H, W, kernel_size, padding=0, gpu_id=0):
         self.H = H
         self.W = W
         self.kernel_size = kernel_size
@@ -367,6 +374,8 @@ class UnrollFeature:
         # VALID: input: HxW                           output: K(H-2*half_kernel)xK(W-2*half_kernel)
         self.gather_index = self.get_gather_index()
 
+        self.device = torch.device("cuda:%d"%gpu_id)
+
     def get_gather_index(self):
         '''
         operates in CPU, convert to cuda at return
@@ -379,7 +388,7 @@ class UnrollFeature:
             H_padded = self.H + 2*self.padding
             W_padded = self.W + 2*self.padding
 
-            padded_feature_index = torch.arange(0, round(H_padded*W_padded)).view(H_padded, W_padded).type(torch.LongTensor)
+            padded_feature_index = torch.arange(0, round(H_padded*W_padded)).view(H_padded, W_padded).long()
             unrolled_feature_index = torch.LongTensor(round(self.kernel_size*self.H), round(self.kernel_size*self.W))
             # unroll
             for i in range(self.H):
@@ -399,7 +408,7 @@ class UnrollFeature:
             H_cropped = self.H - 2*self.half_kernel_size
             W_cropped = self.W - 2*self.half_kernel_size
 
-            feature_index = torch.arange(0, self.H*self.W).view(self.H, self.W).type(torch.LongTensor)
+            feature_index = torch.arange(0, self.H*self.W).view(self.H, self.W).long()
             unrolled_feature_index = torch.LongTensor(round(self.kernel_size*H_cropped), round(self.kernel_size*W_cropped))
             # unroll
             for i in range(H_cropped):
@@ -415,7 +424,7 @@ class UnrollFeature:
             # input: HxW      output: K(H-2*half_kernel)xK(W-2*half_kernel)
             gather_index = unrolled_feature_index.view(self.kernel_size*round(self.H-2*self.half_kernel_size) * self.kernel_size*round(self.W-2*self.half_kernel_size))
 
-        return Variable(gather_index, requires_grad=False).cuda()
+        return gather_index.to(self.device)
 
     def unroll(self, x):
         '''
@@ -475,7 +484,7 @@ def knn_gather(som_node, som_node_knn_I, som_node_neighbors):
     som_node_neighbors[b, c, n, k] = som_node[b, c, som_node_knn_I[b, n, k]]
 
 
-def knn_gather_wrapper(som_node, som_node_knn_I):
+def knn_gather_wrapper(som_node, som_node_knn_I, gpu_id):
     '''
 
     :param som_node: Bx3xN
@@ -489,11 +498,11 @@ def knn_gather_wrapper(som_node, som_node_knn_I):
     K = som_node_knn_I.size()[2]
     assert C==3
 
-    som_node_neighbors = torch.FloatTensor(B, C, N, K).cuda().zero_()
+    som_node_neighbors = torch.FloatTensor(B, C, N, K).to(torch.device("cuda:%d"%gpu_id)).zero_()
 
-    som_node_cuda = get_devicendarray_float32(som_node)
-    som_node_knn_I_cuda = get_devicendarray_int32(som_node_knn_I.type(torch.cuda.IntTensor))
-    som_node_neighbors_cuda = get_devicendarray_float32(som_node_neighbors)
+    som_node_cuda = get_devicendarray_float32(som_node.data)
+    som_node_knn_I_cuda = get_devicendarray_int32(som_node_knn_I.int().data)
+    som_node_neighbors_cuda = get_devicendarray_float32(som_node_neighbors.data)
 
     knn_gather[(B, C), (N, K)](som_node_cuda, som_node_knn_I_cuda, som_node_neighbors_cuda)
 
@@ -524,7 +533,7 @@ def knn_gather_by_indexing(som_node, som_node_knn_I):
 if __name__=='__main__':
     # unroll_feature = UnrollFeature(8, 8, 3, 1)
     # x = torch.arange(1, 65).cuda().view(8, 8)
-    # x = Variable(x.unsqueeze(0).unsqueeze(0).expand(8, 384, 8, 8), requires_grad=False)
+    # x = x.unsqueeze(0).unsqueeze(0).expand(8, 384, 8, 8).detach()
     #
     # x_unrolled = unroll_feature.unroll(x)
     #
@@ -532,6 +541,6 @@ if __name__=='__main__':
     # print(x_unrolled[0,0,:,:])
 
     coordinate = torch.arange(1, 65).cuda().view(8, 8)
-    coordinate = Variable(coordinate.unsqueeze(0).unsqueeze(0).expand(8, 384, 8, 8), requires_grad=False)
+    coordinate = coordinate.unsqueeze(0).unsqueeze(0).expand(8, 384, 8, 8).detach()
 
     coordinate_unrolled = unroll_average(coordinate, 3, 1)

@@ -6,10 +6,6 @@ import math
 from options import Options
 opt = Options().parse()  # set CUDA_VISIBLE_DEVICES before import torch
 
-opt_test = copy.deepcopy(opt)
-opt_test.name = 'test'
-opt_test.display_id = opt.display_id + 100
-
 import torch
 import torchvision
 from torch.autograd import Variable
@@ -98,8 +94,8 @@ if __name__=='__main__':
                 model.test_loss += model.loss_chamfer.detach() * input_label.size()[0]
 
             model.test_loss /= batch_amount
-            if model.test_loss.data[0] < best_loss:
-                best_loss = model.test_loss.data[0]
+            if model.test_loss.item() < best_loss:
+                best_loss = model.test_loss.item()
             print('Tested network. So far lowest loss: %f' % best_loss )
 
         # learning rate decay
@@ -109,8 +105,8 @@ if __name__=='__main__':
         # save network
         if epoch%1==0 and epoch>0:
             print("Saving network...")
-            model.save_network(model.encoder, 'encoder', '%d_%f' % (epoch, model.test_loss.data[0]), opt.gpu_ids)
-            model.save_network(model.decoder, 'decoder', '%d_%f' % (epoch, model.test_loss.data[0]), opt.gpu_ids)
+            model.save_network(model.encoder, 'encoder', '%d_%f' % (epoch, model.test_loss.item()), opt.gpu_id)
+            model.save_network(model.decoder, 'decoder', '%d_%f' % (epoch, model.test_loss.item()), opt.gpu_id)
 
 
 

@@ -15,14 +15,14 @@ from . import potential_field
 
 
 class SOM():
-    def __init__(self, rows=4, cols=4, dim=3, gpu_ids=False):
+    def __init__(self, rows=4, cols=4, dim=3, gpu_id=-1):
         '''
         Can't put into dataloader, because dataloader keeps only 1 class instance. So this should be used offline,
         to save som result into numpy array.
         :param rows:
         :param cols:
         :param dim:
-        :param gpu_ids:
+        :param gpu_id:
         '''
         self.rows = rows
         self.cols = cols
@@ -33,16 +33,17 @@ class SOM():
         self.learning_rate = 0.5
         self.max_iteration = 60
 
-        self.gpu_ids = gpu_ids
+        self.gpu_id = gpu_id
+        self.device = torch.device("cuda:%d" % gpu_id)
 
         # node: Cx(rowsxcols), tensor
         self.node = torch.FloatTensor(self.dim, self.rows * self.cols).zero_()
         self.node_idx_list = torch.from_numpy(np.arange(self.rows * self.cols).astype(np.float32))
         self.init_weighting_matrix = torch.FloatTensor(self.node_num, self.rows, self.cols)  # node_numxrowsxcols
-        if self.gpu_ids:
-            self.node = self.node.cuda()
-            self.node_idx_list = self.node_idx_list.cuda()
-            self.init_weighting_matrix = self.init_weighting_matrix.cuda()
+        if self.gpu_id >= 0:
+            self.node = self.node.to(self.device)
+            self.node_idx_list = self.node_idx_list.to(self.device)
+            self.init_weighting_matrix = self.init_weighting_matrix.to(self.device)
 
         self.get_init_weighting_matrix()
 
@@ -61,8 +62,8 @@ class SOM():
         for idx in range(self.rows * self.cols):
             (i, j) = self.idx2multi(idx)
             self.init_weighting_matrix[idx, :] = self.gaussian((i, j), self.sigma)
-        if self.gpu_ids:
-            self.init_weighting_matrix = self.init_weighting_matrix.cuda()
+        if self.gpu_id >= 0:
+            self.init_weighting_matrix = self.init_weighting_matrix.to(self.device)
 
     def get_weighting_matrix(self, sigma):
         scale = 1.0 / ((sigma / self.sigma) ** 2)
@@ -146,8 +147,8 @@ class SOM():
         #         for idx in range(self.rows*self.cols):
         #             (i,j) = self.idx2multi(idx)
         #             weighting_matrix[idx,:] = self.gaussian((i,j), sigma)
-        #         if self.gpu_ids:
-        #             weighting_matrix = weighting_matrix.cuda()
+        #         if self.gpu_id >= 0:
+        #             weighting_matrix = weighting_matrix.to(self.device)
         # compute the neighrbor weighting using pre-computed matrix
         weighting_matrix = self.get_weighting_matrix(sigma)  # node_numxrowsxcols
 
@@ -173,7 +174,7 @@ class SOM():
 
 
 class BatchSOM():
-    def __init__(self, rows=4, cols=4, dim=3, gpu_ids=True, batch_size=10):
+    def __init__(self, rows=4, cols=4, dim=3, gpu_id=0, batch_size=10):
         self.rows = rows
         self.cols = cols
         self.dim = dim
@@ -183,16 +184,17 @@ class BatchSOM():
         self.learning_rate = 0.5
         self.max_iteration = 30
 
-        self.gpu_ids = gpu_ids
+        self.gpu_id = gpu_id
+        self.device = torch.device("cuda:%d" % gpu_id)
         self.batch_size = batch_size
 
         # node: BxCx(rowsxcols), tensor
         self.node = torch.FloatTensor(self.batch_size, self.dim, self.rows * self.cols).zero_()
         self.node_idx_list = torch.from_numpy(np.arange(self.node_num).astype(np.int64))  # node_num LongTensor
         self.init_weighting_matrix = torch.FloatTensor(self.node_num, self.rows, self.cols)  # node_numxrowsxcols
-        if self.gpu_ids:
-            self.node = self.node.cuda()
-            self.node_idx_list = self.node_idx_list.cuda()
+        if self.gpu_id >= 0:
+            self.node = self.node.to(self.device)
+            self.node_idx_list = self.node_idx_list.to(self.device)
 
         # get initial weighting matrix
         self.get_init_weighting_matrix()
@@ -221,8 +223,8 @@ class BatchSOM():
         for idx in range(self.rows * self.cols):
             (i, j) = self.idx2multi(idx)
             self.init_weighting_matrix[idx, :] = self.gaussian((i, j), self.sigma)
-        if self.gpu_ids:
-            self.init_weighting_matrix = self.init_weighting_matrix.cuda()
+        if self.gpu_id >= 0:
+            self.init_weighting_matrix = self.init_weighting_matrix.to(self.device)
 
     def get_weighting_matrix(self, sigma):
         scale = 1.0 / ((sigma / self.sigma) ** 2)

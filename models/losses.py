@@ -30,7 +30,7 @@ def robust_norm(var):
 class CrossEntropyLossSeg(nn.Module):
     def __init__(self, weight=None, size_average=True):
         super(CrossEntropyLossSeg, self).__init__()
-        self.nll_loss = nn.NLLLoss2d(weight, size_average)
+        self.nll_loss = nn.NLLLoss(weight, size_average)
 
     def forward(self, inputs, targets):
         '''
@@ -105,7 +105,7 @@ def compute_iou_np_array(score, seg, label, visualizer, opt, input_pc):
             if union.sum() == 0:
                 iou_part = 1.0
             else:
-                iou_part = intersection.sum() / (union.sum() + 0.0001)
+                iou_part = intersection.int().sum().item() / (union.int().sum().item() + 0.0001)
 
             iou_pc.append(iou_part)
 
@@ -155,10 +155,14 @@ def compute_iou(score, seg, label, visualizer, opt, input_pc):
             intersection = (gt + predict) == 2
             union = (gt + predict) >= 1
 
+            # print(intersection)
+            # print(union)
+            # assert False
+
             if union.sum() == 0:
                 iou_part = 1.0
             else:
-                iou_part = intersection.sum() / (union.sum() + 0.0001)
+                iou_part = intersection.int().sum().item() / (union.int().sum().item() + 0.0001)
 
             # debug to see what happened
             # if iou_part < 0.1:
@@ -196,18 +200,20 @@ class ChamferLoss(nn.Module):
         self.res = faiss.StandardGpuResources()
         self.res.setTempMemoryFraction(0.1)
         self.flat_config = faiss.GpuIndexFlatConfig()
-        self.flat_config.device = 0
+        self.flat_config.device = opt.gpu_id
 
         # place holder
-        self.forward_loss = Variable(torch.FloatTensor([0]), requires_grad=False)
-        self.backward_loss = Variable(torch.FloatTensor([0]), requires_grad=False)
+        self.forward_loss = torch.FloatTensor([0])
+        self.backward_loss = torch.FloatTensor([0])
 
     def build_nn_index(self, database):
         '''
         :param database: numpy array of Nx3
         :return: Faiss index, in CPU
         '''
-        index = faiss.GpuIndexFlatL2(self.res, self.dimension, self.flat_config)  # dimension is 3
+        # index = faiss.GpuIndexFlatL2(self.res, self.dimension, self.flat_config)  # dimension is 3
+        index_cpu = faiss.IndexFlatL2(self.dimension)
+        index = faiss.index_cpu_to_gpu(self.res, self.opt.gpu_id, index_cpu)
         index.add(database)
         return index
 
@@ -220,11 +226,11 @@ class ChamferLoss(nn.Module):
         '''
         D, I = index.search(query, k)
 
-        D_var = Variable(torch.from_numpy(np.ascontiguousarray(D)), requires_grad=False)
-        I_var = Variable(torch.from_numpy(np.ascontiguousarray(I).astype(np.int64)), requires_grad=False)
-        if self.opt.gpu_ids:
-            D_var = D_var.cuda()
-            I_var = I_var.cuda()
+        D_var =torch.from_numpy(np.ascontiguousarray(D))
+        I_var = torch.from_numpy(np.ascontiguousarray(I).astype(np.int64))
+        if self.opt.gpu_id >= 0:
+            D_var = D_var.to(self.opt.device)
+            I_var = I_var.to(self.opt.device)
 
         return D_var, I_var
 
@@ -242,13 +248,13 @@ class ChamferLoss(nn.Module):
         gt_pc_np = np.ascontiguousarray(torch.transpose(gt_pc.data.clone(), 1, 2).cpu().numpy())  # BxNx3
 
         # selected_gt: Bxkx3xM
-        selected_gt_by_predict = Variable(torch.FloatTensor(predict_pc_size[0], self.k, predict_pc_size[1], predict_pc_size[2]), requires_grad=False)
+        selected_gt_by_predict = torch.FloatTensor(predict_pc_size[0], self.k, predict_pc_size[1], predict_pc_size[2])
         # selected_predict: Bxkx3xN
-        selected_predict_by_gt = Variable(torch.FloatTensor(gt_pc_size[0], self.k, gt_pc_size[1], gt_pc_size[2]), requires_grad=False)
+        selected_predict_by_gt = torch.FloatTensor(gt_pc_size[0], self.k, gt_pc_size[1], gt_pc_size[2])
 
-        if self.opt.gpu_ids:
-            selected_gt_by_predict = selected_gt_by_predict.cuda()
-            selected_predict_by_gt = selected_predict_by_gt.cuda()
+        if self.opt.gpu_id >= 0:
+            selected_gt_by_predict = selected_gt_by_predict.to(self.opt.device)
+            selected_predict_by_gt = selected_predict_by_gt.to(self.opt.device)
 
         # process each batch independently.
         for i in range(predict_pc_np.shape[0]):

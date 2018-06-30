@@ -3,13 +3,15 @@ import os
 from util import util
 import torch
 
+from numba import cuda
+
 class Options():
     def __init__(self):
         self.parser = argparse.ArgumentParser()
         self.initialized = False
 
     def initialize(self):
-        self.parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2')
+        self.parser.add_argument('--gpu_id', type=int, default=0, help='gpu id: e.g. 0, 1, 2. -1 is no GPU')
 
         self.parser.add_argument('--dataset', type=str, default='shrec', help='modelnet / shrec')
         self.parser.add_argument('--dataroot', default='/ssd/dataset/SHREC2016/', help='path to images & laser point clouds')
@@ -52,18 +54,9 @@ class Options():
             self.initialize()
         self.opt = self.parser.parse_args()
 
-        str_ids = self.opt.gpu_ids.split(',')
-        self.opt.gpu_ids = []
-        for str_id in str_ids:
-            if not str_id:
-                continue
-            id = int(str_id)
-            if id >= 0:
-                self.opt.gpu_ids.append(id)
-
-        # set gpu ids
-        if len(self.opt.gpu_ids) > 0:
-            torch.cuda.set_device(self.opt.gpu_ids[0])
+        self.opt.device = torch.device("cuda:%d" % (self.opt.gpu_id) if torch.cuda.is_available() else "cpu")
+        cuda.select_device(self.opt.gpu_id)
+        # torch.cuda.set_device(self.opt.gpu_id)
 
         args = vars(self.opt)
 

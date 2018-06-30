@@ -222,10 +222,10 @@ class ModelNet_Shrec_Loader(data.Dataset):
             # som_node_np = rotate_point_cloud_90(som_node_np)
 
             # rotation perturbation, pc and som should follow the same rotation, surface normal rotation is unclear
-            if False:
-                pc_np = rotate_perturbation_point_cloud(pc_np)
-                surface_normal_np = rotate_perturbation_point_cloud(surface_normal_np)
-                som_node_np = rotate_perturbation_point_cloud(som_node_np)
+            if self.opt.rot_horizontal:
+                pc_np, surface_normal_np, som_node_np = rotate_point_cloud_with_normal_som(pc_np, surface_normal_np, som_node_np)
+            if self.opt.rot_perturbation:
+                pc_np, surface_normal_np, som_node_np = rotate_perturbation_point_cloud_with_normal_som(pc_np, surface_normal_np, som_node_np)
 
             # random jittering
             pc_np = jitter_point_cloud(pc_np)
@@ -236,14 +236,13 @@ class ModelNet_Shrec_Loader(data.Dataset):
             scale = np.random.uniform(low=0.8, high=1.2)
             pc_np = pc_np * scale
             som_node_np = som_node_np * scale
-            scale = np.random.uniform(low=0.8, high=1.2)
             surface_normal_np = surface_normal_np * scale
 
             # random shift
-            # if self.opt.classes == 10:
-            #     shift = np.random.uniform(-0.1, 0.1, (1,3))
-            #     pc_np += shift
-            #     som_node_np += shift
+            if self.opt.translation_perturbation:
+                shift = np.random.uniform(-0.1, 0.1, (1,3))
+                pc_np += shift
+                som_node_np += shift
 
         # convert to tensor
         pc = torch.from_numpy(pc_np.transpose().astype(np.float32))  # 3xN

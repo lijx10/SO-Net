@@ -6,10 +6,6 @@ import math
 from options import Options
 opt = Options().parse()  # set CUDA_VISIBLE_DEVICES before import torch
 
-opt_test = copy.deepcopy(opt)
-opt_test.name = 'test'
-opt_test.display_id = opt.display_id + 100
-
 import torch
 import torchvision
 from torch.autograd import Variable
@@ -91,27 +87,30 @@ if __name__=='__main__':
                 model.test_loss_segmenter += model.loss_segmenter.detach() * input_label.size()[0]
 
                 _, predicted_seg = torch.max(model.score_segmenter.data, dim=1, keepdim=False)
-                correct_mask = torch.eq(predicted_seg, model.input_seg).type(torch.FloatTensor)
+                correct_mask = torch.eq(predicted_seg, model.input_seg).float()
                 test_accuracy_segmenter = torch.mean(correct_mask)
                 model.test_accuracy_segmenter += test_accuracy_segmenter * input_label.size()[0]
 
                 # segmentation iou
-                test_iou_batch = losses.compute_iou(model.score_segmenter.data, model.input_seg, model.input_label, visualizer, opt, input_pc)
+                test_iou_batch = losses.compute_iou(model.score_segmenter.cpu().data, model.input_seg.cpu().data, model.input_label.cpu().data, visualizer, opt, input_pc.cpu().data)
                 model.test_iou += test_iou_batch * input_label.size()[0]
+
+                # print(test_iou_batch)
+                # print(model.score_segmenter.size())
 
             print(batch_amount)
             model.test_loss_segmenter /= batch_amount
             model.test_accuracy_segmenter /= batch_amount
             model.test_iou /= batch_amount
-            if model.test_iou.data[0] > best_iou:
-                best_iou = model.test_iou.data[0]
+            if model.test_iou.item() > best_iou:
+                best_iou = model.test_iou.item()
             print('Tested network. So far best segmentation: %f' % (best_iou) )
 
             # save network
-            if model.test_iou.data[0] > 0.835:
+            if model.test_iou.item() > 0.835:
                 print("Saving network...")
-                model.save_network(model.encoder, 'encoder', '%d_%f' % (epoch, model.test_iou.data[0]), opt.gpu_ids)
-                model.save_network(model.segmenter, 'segmenter', '%d_%f' % (epoch, model.test_iou.data[0]), opt.gpu_ids)
+                model.save_network(model.encoder, 'encoder', '%d_%f' % (epoch, model.test_iou.item()), opt.gpu_id)
+                model.save_network(model.segmenter, 'segmenter', '%d_%f' % (epoch, model.test_iou.item()), opt.gpu_id)
 
         # learning rate decay
         if epoch%30==0 and epoch>0:
@@ -120,7 +119,7 @@ if __name__=='__main__':
         # save network
         # if epoch%20==0 and epoch>0:
         #     print("Saving network...")
-        #     model.save_network(model.classifier, 'cls', '%d' % epoch, opt.gpu_ids)
+        #     model.save_network(model.classifier, 'cls', '%d' % epoch, opt.gpu_id)
 
 
 

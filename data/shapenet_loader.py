@@ -182,7 +182,7 @@ class ShapeNetLoader(data.Dataset):
         # convert to tensor
         pc = torch.from_numpy(pc_np.transpose().astype(np.float32))  # 3xN
         sn = torch.from_numpy(sn_np.transpose().astype(np.float32))  # 3xN
-        seg = torch.from_numpy(seg_np.astype(np.float32))  # N
+        seg = torch.from_numpy(seg_np.astype(np.int64))  # N
 
         # som
         som_node = torch.from_numpy(som_node_np.transpose().astype(np.float32))  # 3xnode_num

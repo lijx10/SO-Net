@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 from torch.nn.modules.batchnorm import _BatchNorm
 import numpy as np
 import math
@@ -16,11 +15,65 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 
+class Transformer(nn.Module):
+    def __init__(self, opt):
+        super(Transformer, self).__init__()
+        self.opt = opt
+
+        self.first_pointnet = PointNet(3, (32, 64, 128), activation=self.opt.activation, normalization=self.opt.normalization,
+                                       momentum=opt.bn_momentum, bn_momentum_decay_step=opt.bn_momentum_decay_step, bn_momentum_decay=opt.bn_momentum_decay)
+
+        self.second_pointnet = PointNet(128+128, (256, 256), activation=self.opt.activation, normalization=self.opt.normalization,
+                                        momentum=opt.bn_momentum, bn_momentum_decay_step=opt.bn_momentum_decay_step, bn_momentum_decay=opt.bn_momentum_decay)
+
+        # regressor to get a sin(theta)
+        self.fc1 = MyLinear(256, 128, activation=self.opt.activation, normalization=self.opt.normalization,
+                            momentum=opt.bn_momentum, bn_momentum_decay_step=opt.bn_momentum_decay_step,
+                            bn_momentum_decay=opt.bn_momentum_decay)
+        self.fc2 = MyLinear(128, 64, activation=self.opt.activation, normalization=self.opt.normalization,
+                            momentum=opt.bn_momentum, bn_momentum_decay_step=opt.bn_momentum_decay_step,
+                            bn_momentum_decay=opt.bn_momentum_decay)
+        self.fc3 = MyLinear(64, 1, activation=None, normalization=None)
+
+        self.dropout1 = nn.Dropout(p=self.opt.dropout)
+        self.dropout2 = nn.Dropout(p=self.opt.dropout)
+
+    def forward(self, x, sn=None, epoch=None):
+        '''
+
+        :param x: BxMx3 som nodes / Bx3xN points
+        :param sn: Bx3xN surface normal
+        :return:
+        '''
+
+        first_pn_out = self.first_pointnet(x, epoch)  # BxCxN
+        feature_1, _ = torch.max(first_pn_out, dim=2, keepdim=False)  # BxC
+
+
+        second_pn_out = self.second_pointnet(torch.cat((first_pn_out, feature_1.unsqueeze(2).expand_as(first_pn_out)), dim=1), epoch)
+        feature_2, _ = torch.max(second_pn_out, dim=2, keepdim=False)
+
+        # get sin(theta)
+        fc1_out = self.fc1(feature_2, epoch)
+        if self.opt.dropout > 0.1:
+            fc1_out = self.dropout1(fc1_out)
+        self.fc2_out = self.fc2(fc1_out, epoch)
+        if self.opt.dropout > 0.1:
+            self.fc2_out = self.dropout2(self.fc2_out)
+
+        sin_theta = torch.tanh(self.fc3(self.fc2_out, epoch))  # Bx1
+
+        return sin_theta
+
+
 class Encoder(nn.Module):
     def __init__(self, opt):
         super(Encoder, self).__init__()
         self.opt = opt
         self.feature_num = opt.feature_num
+
+        # transformer
+        self.transformer = Transformer(opt)
 
         # first PointNet
         if self.opt.surface_normal == True:
@@ -36,7 +89,7 @@ class Encoder(nn.Module):
                                       momentum=opt.bn_momentum, bn_momentum_decay_step=opt.bn_momentum_decay_step, bn_momentum_decay=opt.bn_momentum_decay)
 
             # final PointNet
-            self.final_pointnet = PointNet(3+512, (768, self.feature_num), activation=self.opt.activation, normalization=self.opt.normalization, 
+            self.final_pointnet = PointNet(3+512, (768, self.feature_num), activation=self.opt.activation, normalization=self.opt.normalization,
                                            momentum=opt.bn_momentum, bn_momentum_decay_step=opt.bn_momentum_decay_step, bn_momentum_decay=opt.bn_momentum_decay)
         else:
             # final PointNet
@@ -48,10 +101,10 @@ class Encoder(nn.Module):
         # build som for clustering, node initalization is done in __init__
         rows = int(math.sqrt(self.opt.node_num))
         cols = rows
-        self.som_builder = som.BatchSOM(rows, cols, 3, True, self.opt.batch_size)
+        self.som_builder = som.BatchSOM(rows, cols, 3, self.opt.gpu_id, self.opt.batch_size)
 
         # masked max
-        self.masked_max = operations.MaskedMax(self.opt.node_num)
+        self.masked_max = operations.MaskedMax(self.opt.node_num, gpu_id=self.opt.gpu_id)
 
         # padding
         self.zero_pad = torch.nn.ZeroPad2d(padding=1)
@@ -59,45 +112,65 @@ class Encoder(nn.Module):
     def forward(self, x, sn, node, node_knn_I, is_train=False, epoch=None):
         '''
 
-        :param x: Bx3xN Variable
-        :param sn: Bx3xN Variable
+        :param x: Bx3xN Tensor
+        :param sn: Bx3xN Tensor
         :param node: Bx3xM FloatTensor
         :param node_knn_I: BxMxk_som LongTensor
         :param is_train: determine whether to add noise in KNNModule
         :return:
         '''
 
-        # optimize the som, access the Variable's tensor, the optimize function should not modify the tensor
+        # optimize the som, access the Tensor's tensor, the optimize function should not modify the tensor
         # self.som_builder.optimize(x.data)
         self.som_builder.node.resize_(node.size()).copy_(node)
 
         # modify the x according to the nodes, minus the center
-        self.mask, mask_row_max, min_idx = self.som_builder.query_topk(x.data, k=self.opt.k)  # BxNxnode_num, Bxnode_num
-        mask_row_max = Variable(mask_row_max, requires_grad=False)  # Bxnode_num
-        mask_row_sum = torch.sum(self.mask, dim=1)+0.00001  # Bxnode_num
-        mask = self.mask.unsqueeze(1)  # Bx1xNxnode_num
+        self.mask, mask_row_max, min_idx = self.som_builder.query_topk(x.data, k=self.opt.k)  # BxkNxnode_num, Bxnode_num
+        mask_row_sum = torch.sum(self.mask, dim=1)  # Bxnode_num
+        mask = self.mask.unsqueeze(1)  # Bx1xkNxnode_num
 
         # if necessary, stack the x
         x_list, sn_list = [], []
         for i in range(self.opt.k):
             x_list.append(x)
             sn_list.append(sn)
-        x = torch.cat(tuple(x_list), dim=2)
-        sn = torch.cat(tuple(sn_list), dim=2)
+        x_stack = torch.cat(tuple(x_list), dim=2)
+        sn_stack = torch.cat(tuple(sn_list), dim=2)
 
         # re-compute center, instead of using som.node
-        x_data_unsqueeze = x.data.unsqueeze(3)  # BxCxNx1
-        x_data_masked = x_data_unsqueeze * mask  # BxCxNxnode_num
-        cluster_mean = torch.sum(x_data_masked, dim=2) / mask_row_sum.unsqueeze(1)  # BxCxnode_num
+        x_stack_data_unsqueeze = x_stack.data.unsqueeze(3)  # BxCxkNx1
+        x_stack_data_masked = x_stack_data_unsqueeze * mask.float()  # BxCxkNxnode_num
+        cluster_mean = torch.sum(x_stack_data_masked, dim=2) / (mask_row_sum.unsqueeze(1).float()+1e-5)  # BxCxnode_num
         self.som_builder.node = cluster_mean
+        self.som_node = self.som_builder.node
+
+
+        # ====== apply transformer to rotate x_stack, sn_stack, som_node ======
+        # sin_theta = self.transformer(x=self.som_node, sn=None, epoch=epoch)  # Bx1
+        # # sin_theta = self.transformer(x=torch.cat((x_stack, sn_stack), dim=1), sn=None, epoch=epoch)  # Bx1
+        # cos_theta = torch.sqrt(1 + 1e-5 - sin_theta*sin_theta)  # Bx1
+        # B = x.size()[0]
+        # rotation_matrix = torch.Tensor(B, 3, 3).zero_().to(self.opt.device)  # Bx3x3
+        # rotation_matrix[:, 0, 0] = cos_theta[:, 0]
+        # rotation_matrix[:, 0, 2] = sin_theta[:, 0]
+        # rotation_matrix[:, 1, 1] = 1
+        # rotation_matrix[:, 2, 0] = -1 * sin_theta[:, 0]
+        # rotation_matrix[:, 2, 2] = cos_theta[:, 0]
+        # # print(rotation_matrix)
+
+        # x_stack = torch.matmul(rotation_matrix, x_stack)
+        # sn_stack = torch.matmul(rotation_matrix, sn_stack)
+        # self.som_node = torch.matmul(rotation_matrix, self.som_node)
+        # self.som_builder.node = torch.matmul(rotation_matrix.data, self.som_builder.node)
+        # ====== apply transformer to rotate x_stack, sn_stack, som_node ======
+
 
         # assign each point with a center
-        node_expanded = self.som_builder.node.unsqueeze(2)  # BxCx1xnode_num, som.node is BxCxnode_num
-        centers = torch.sum(mask * node_expanded, dim=3)  # BxCxkN
-        self.x_centers_var = Variable(centers, requires_grad=False)
+        node_expanded = self.som_node.data.unsqueeze(2)  # BxCx1xnode_num, som.node is BxCxnode_num
+        self.centers = torch.sum(mask.float() * node_expanded, dim=3).detach()  # BxCxkN
 
-        self.x_decentered = (x - self.x_centers_var).detach()  # Bx3xkN
-        x_augmented = torch.cat((self.x_decentered, sn), dim=1)
+        self.x_decentered = (x_stack - self.centers).detach()  # Bx3xkN
+        x_augmented = torch.cat((self.x_decentered, sn_stack), dim=1)  # Bx6xkN
 
         # go through the first PointNet
         if self.opt.surface_normal == True:
@@ -105,10 +178,8 @@ class Encoder(nn.Module):
         else:
             self.first_pn_out = self.first_pointnet(self.x_decentered, epoch)
 
-        gather_index = self.masked_max.compute(self.first_pn_out.data, min_idx, mask)
-        self.first_pn_out_masked_max = self.first_pn_out.gather(dim=2, index=Variable(gather_index, requires_grad=False)) * mask_row_max.unsqueeze(1)  # BxCxM
-
-        self.som_node = Variable(self.som_builder.node, requires_grad=False)  # Bx3xM
+        gather_index = self.masked_max.compute(self.first_pn_out.data, min_idx, mask).detach()
+        self.first_pn_out_masked_max = self.first_pn_out.gather(dim=2, index=gather_index * mask_row_max.unsqueeze(1).long())  # BxCxM
 
         if self.opt.som_k >= 2:
             # second pointnet, knn search on SOM nodes: ----------------------------------
@@ -215,10 +286,9 @@ class Segmenter(nn.Module):
         x = torch.cat(tuple(x_list), dim=2)
         sn = torch.cat(tuple(sn_list), dim=2)
 
-        label_onehot = torch.FloatTensor(B, 16).zero_().cuda()  # Bx16
+        label_onehot = torch.FloatTensor(B, 16).zero_().to(self.opt.device)  # Bx16
         label_onehot.scatter_(1, label.unsqueeze(1), 1)  # Bx16
-        label_onehot = label_onehot.unsqueeze(2).expand(B, 16, kN)  # Bx16xkN
-        label_onehot = Variable(label_onehot, requires_grad=False)  # Bx16xkN
+        label_onehot = label_onehot.unsqueeze(2).expand(B, 16, kN).detach()  # Bx16xkN
 
         feature_expanded = feature.unsqueeze(2).expand(B, self.feature_num, kN)
 

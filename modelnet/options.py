@@ -3,17 +3,19 @@ import os
 from util import util
 import torch
 
+from numba import cuda
+
 class Options():
     def __init__(self):
         self.parser = argparse.ArgumentParser()
         self.initialized = False
 
     def initialize(self):
-        self.parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2')
+        self.parser.add_argument('--gpu_id', type=int, default=0, help='gpu id: e.g. 0, 1, 2. -1 is no GPU')
 
         self.parser.add_argument('--dataset', type=str, default='modelnet', help='modelnet / shrec / shapenet')
         self.parser.add_argument('--dataroot', default='/ssd/dataset/modelnet40-normal_numpy/', help='path to images & laser point clouds')
-        self.parser.add_argument('--classes', type=int, default=40, help='ModelNet40 or ModelNet10')
+        self.parser.add_argument('--classes', type=int, default=10, help='ModelNet40 or ModelNet10')
         self.parser.add_argument('--name', type=str, default='train', help='name of the experiment. It decides where to store samples and models')
         self.parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
 
@@ -37,13 +39,17 @@ class Options():
         self.parser.add_argument('--pretrain_lr_ratio', type=float, default=1, help='learning rate ratio between pretrained encoder and classifier')
 
         self.parser.add_argument('--som_k', type=int, default=9, help='k nearest neighbor of SOM nodes searching on SOM nodes')
-        self.parser.add_argument('--som_k_type', type=str, default='avg', help='avg / center')
+        self.parser.add_argument('--som_k_type', type=str, default='center', help='avg / center')
 
         self.parser.add_argument('--random_pc_dropout_lower_limit', type=float, default=1, help='keep ratio lower limit')
         self.parser.add_argument('--bn_momentum', type=float, default=0.1, help='normalization momentum, typically 0.1. Equal to (1-m) in TF')
         self.parser.add_argument('--bn_momentum_decay_step', type=int, default=None, help='BN momentum decay step. e.g, 0.5->0.01.')
         self.parser.add_argument('--bn_momentum_decay', type=float, default=0.6, help='BN momentum decay step. e.g, 0.5->0.01.')
 
+
+        self.parser.add_argument('--rot_horizontal', type=bool, default=False, help='Rotation augmentation around vertical axis.')
+        self.parser.add_argument('--rot_perturbation', type=bool, default=False, help='Small rotation augmentation around 3 axis.')
+        self.parser.add_argument('--translation_perturbation', type=bool, default=False, help='Small translation augmentation around 3 axis.')
 
         self.initialized = True
 
@@ -52,18 +58,9 @@ class Options():
             self.initialize()
         self.opt = self.parser.parse_args()
 
-        str_ids = self.opt.gpu_ids.split(',')
-        self.opt.gpu_ids = []
-        for str_id in str_ids:
-            if not str_id:
-                continue
-            id = int(str_id)
-            if id >= 0:
-                self.opt.gpu_ids.append(id)
-
-        # set gpu ids
-        if len(self.opt.gpu_ids) > 0:
-            torch.cuda.set_device(self.opt.gpu_ids[0])
+        self.opt.device = torch.device("cuda:%d"%(self.opt.gpu_id) if torch.cuda.is_available() else "cpu")
+        cuda.select_device(self.opt.gpu_id)
+        # torch.cuda.set_device(self.opt.gpu_id)
 
         args = vars(self.opt)
 

@@ -19,10 +19,10 @@ class Model():
         self.segmenter = networks.Segmenter(opt)
 
         self.softmax_segmenter = losses.CrossEntropyLossSeg()
-        if self.opt.gpu_ids:
-            self.encoder = self.encoder.cuda()
-            self.segmenter = self.segmenter.cuda()
-            self.softmax_segmenter = self.softmax_segmenter.cuda()
+        if self.opt.gpu_id >= 0:
+            self.encoder = self.encoder.to(self.opt.device)
+            self.segmenter = self.segmenter.to(self.opt.device)
+            self.softmax_segmenter = self.softmax_segmenter.to(self.opt.device)
 
         # learning rate_control
         if self.opt.pretrain is not None:
@@ -49,19 +49,19 @@ class Model():
         self.input_node_knn_I = torch.LongTensor(self.opt.batch_size, self.opt.node_num, self.opt.som_k)
 
         # record the test loss and accuracy
-        self.test_loss_segmenter = Variable(torch.FloatTensor([0]), requires_grad=False)
-        self.test_accuracy_segmenter = Variable(torch.FloatTensor([0]), requires_grad=False)
-        self.test_iou = Variable(torch.FloatTensor([0]), requires_grad=False)
+        self.test_loss_segmenter = torch.FloatTensor([0])
+        self.test_accuracy_segmenter = torch.FloatTensor([0])
+        self.test_iou = torch.FloatTensor([0])
 
-        if self.opt.gpu_ids:
-            self.input_pc = self.input_pc.cuda()
-            self.input_sn = self.input_sn.cuda()
-            self.input_label = self.input_label.cuda()
-            self.input_seg = self.input_seg.cuda()
-            self.input_node = self.input_node.cuda()
-            self.input_node_knn_I = self.input_node_knn_I.cuda()
-            self.test_loss_segmenter = self.test_loss_segmenter.cuda()
-            self.test_accuracy_segmenter = self.test_accuracy_segmenter.cuda()
+        if self.opt.gpu_id >= 0:
+            self.input_pc = self.input_pc.to(self.opt.device)
+            self.input_sn = self.input_sn.to(self.opt.device)
+            self.input_label = self.input_label.to(self.opt.device)
+            self.input_seg = self.input_seg.to(self.opt.device)
+            self.input_node = self.input_node.to(self.opt.device)
+            self.input_node_knn_I = self.input_node_knn_I.to(self.opt.device)
+            self.test_loss_segmenter = self.test_loss_segmenter.to(self.opt.device)
+            self.test_accuracy_segmenter = self.test_accuracy_segmenter.to(self.opt.device)
 
 
     def set_input(self, input_pc, input_sn, input_label, input_seg, input_node, input_node_knn_I):
@@ -71,10 +71,10 @@ class Model():
         self.input_seg.resize_(input_seg.size()).copy_(input_seg)
         self.input_node.resize_(input_node.size()).copy_(input_node)
         self.input_node_knn_I.resize_(input_node_knn_I.size()).copy_(input_node_knn_I)
-        self.pc = Variable(self.input_pc, requires_grad=False)
-        self.sn = Variable(self.input_sn, requires_grad=False)
-        self.seg = Variable(self.input_seg, requires_grad=False)
-        self.label = Variable(self.input_label, requires_grad=False)
+        self.pc = self.input_pc.detach()
+        self.sn = self.input_sn.detach()
+        self.seg = self.input_seg.detach()
+        self.label = self.input_label.detach()
 
     def forward(self, is_train=False, epoch=None):
         # ------------------------------------------------------------------
@@ -89,9 +89,9 @@ class Model():
         # BxkNxnode_num -> BxkN, tensor
         _, mask_max_idx = torch.max(self.encoder.mask, dim=2, keepdim=False)  # BxkN
         mask_max_idx = mask_max_idx.unsqueeze(1)  # Bx1xkN
-        mask_max_idx_384 = Variable(mask_max_idx.expand(batch_size, 384, k*N), requires_grad=False)
-        mask_max_idx_512 = Variable(mask_max_idx.expand(batch_size, 512, k*N), requires_grad=False)
-        mask_max_idx_fn = Variable(mask_max_idx.expand(batch_size, feature_num, k * N), requires_grad=False)
+        mask_max_idx_384 = mask_max_idx.expand(batch_size, 384, k*N).detach()
+        mask_max_idx_512 = mask_max_idx.expand(batch_size, 512, k*N).detach()
+        mask_max_idx_fn = mask_max_idx.expand(batch_size, feature_num, k * N).detach()
 
         feature_max_first_pn_out = torch.gather(self.encoder.first_pn_out_masked_max , dim=2, index=mask_max_idx_384)  # Bx384xnode_num -> Bx384xkN
         feature_max_knn_feature_1 = torch.gather(self.encoder.knn_feature_1, dim=2, index=mask_max_idx_512)  # Bx512xnode_num -> Bx512xkN
@@ -99,7 +99,7 @@ class Model():
 
         self.score_segmenter = self.segmenter(self.encoder.x_decentered,
                                               self.pc,
-                                              self.encoder.x_centers_var,
+                                              self.encoder.centers,
                                               self.sn,
                                               self.input_label,
                                               self.encoder.first_pn_out,
@@ -157,24 +157,24 @@ class Model():
     def get_current_errors(self):
         # self.score_segmenter: BxclassesxN
         _, predicted_seg = torch.max(self.score_segmenter.data, dim=1, keepdim=False)
-        correct_mask = torch.eq(predicted_seg, self.input_seg).type(torch.FloatTensor)
+        correct_mask = torch.eq(predicted_seg, self.input_seg).float()
         train_accuracy_segmenter = torch.mean(correct_mask)
 
         return OrderedDict([
-            ('train_loss_seg', self.loss_segmenter.data[0]),
+            ('train_loss_seg', self.loss_segmenter.item()),
             ('train_accuracy_seg', train_accuracy_segmenter),
-            ('test_loss_seg', self.test_loss_segmenter.data[0]),
-            ('test_acc_seg', self.test_accuracy_segmenter.data[0]),
-            ('test_iou', self.test_iou.data[0])
+            ('test_loss_seg', self.test_loss_segmenter.item()),
+            ('test_acc_seg', self.test_accuracy_segmenter.item()),
+            ('test_iou', self.test_iou.item())
         ])
 
-    def save_network(self, network, network_label, epoch_label, gpu_ids):
+    def save_network(self, network, network_label, epoch_label, gpu_id):
         save_filename = '%s_net_%s.pth' % (epoch_label, network_label)
         save_path = os.path.join(self.opt.checkpoints_dir, save_filename)
         torch.save(network.cpu().state_dict(), save_path)
-        if len(gpu_ids) and torch.cuda.is_available():
-            # torch.cuda.device(gpu_ids[0])
-            network.cuda()
+        if gpu_id >= 0 and torch.cuda.is_available():
+            # torch.cuda.device(gpu_id)
+            network.to(self.opt.device)
 
     def update_learning_rate(self, ratio):
         # encoder

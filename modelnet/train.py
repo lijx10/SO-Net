@@ -6,13 +6,8 @@ import math
 from options import Options
 opt = Options().parse()  # set CUDA_VISIBLE_DEVICES before import torch
 
-opt_test = copy.deepcopy(opt)
-opt_test.name = 'test'
-opt_test.display_id = opt.display_id + 100
-
 import torch
 import torchvision
-from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -87,32 +82,32 @@ if __name__=='__main__':
 
                 # # accumulate accuracy
                 _, predicted_idx = torch.max(model.score.data, dim=1, keepdim=False)
-                correct_mask = torch.eq(predicted_idx, model.input_label).type(torch.FloatTensor)
-                test_accuracy = torch.mean(correct_mask)
+                correct_mask = torch.eq(predicted_idx, model.input_label).float()
+                test_accuracy = torch.mean(correct_mask).cpu()
                 model.test_accuracy += test_accuracy * input_label.size()[0]
 
             model.test_loss /= batch_amount
             model.test_accuracy /= batch_amount
-            if model.test_accuracy.data[0] > best_accuracy:
-                best_accuracy = model.test_accuracy.data[0]
-            print('Tested network. So far best: %f' % (best_accuracy) )
+            if model.test_accuracy.item() > best_accuracy:
+                best_accuracy = model.test_accuracy.item()
+            print('Tested network. So far best: %f' % best_accuracy)
 
             # save network
             if opt.classes == 10:
-                saving_acc_threshold = 0.945
+                saving_acc_threshold = 0.930
             else:
-                saving_acc_threshold = 0.923
-            if model.test_accuracy.data[0] > saving_acc_threshold:
+                saving_acc_threshold = 0.918
+            if model.test_accuracy.item() > saving_acc_threshold:
                 print("Saving network...")
-                model.save_network(model.encoder, 'encoder', '%d_%f' % (epoch, model.test_accuracy.data[0]), opt.gpu_ids)
-                model.save_network(model.classifier, 'classifier', '%d_%f' % (epoch, model.test_accuracy.data[0]), opt.gpu_ids)
+                model.save_network(model.encoder, 'encoder', '%d_%f' % (epoch, model.test_accuracy.item()), opt.gpu_id)
+                model.save_network(model.classifier, 'classifier', '%d_%f' % (epoch, model.test_accuracy.item()), opt.gpu_id)
 
         # learning rate decay
         if opt.classes == 10:
             lr_decay_step = 40
         else:
             lr_decay_step = 20
-        if epoch%lr_decay_step==0 and epoch>0:
+        if epoch%lr_decay_step==0 and epoch > 0:
             model.update_learning_rate(0.5)
         # batch normalization momentum decay:
         next_epoch = epoch + 1
@@ -125,7 +120,7 @@ if __name__=='__main__':
         # save network
         # if epoch%20==0 and epoch>0:
         #     print("Saving network...")
-        #     model.save_network(model.classifier, 'cls', '%d' % epoch, opt.gpu_ids)
+        #     model.save_network(model.classifier, 'cls', '%d' % epoch, opt.gpu_id)
 
 
 

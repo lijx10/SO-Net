@@ -307,7 +307,7 @@ class KNNModule(nn.Module):
             self.layers.append(MyConv2d(previous_out_channels, c_out, kernel_size=1, stride=1, padding=0, bias=True,
                                         activation=activation, normalization=normalization,
                                         momentum=momentum, bn_momentum_decay_step=bn_momentum_decay_step,
-                                        bn_momentum_decay=bn_momentum_decay).cuda())
+                                        bn_momentum_decay=bn_momentum_decay))
             previous_out_channels = c_out
 
     def forward(self, coordinate, x, precomputed_knn_I, K, center_type, epoch=None):
@@ -341,14 +341,20 @@ class KNNModule(nn.Module):
         # print(knn_I[0])
         # assert False
 
-        neighbors = operations.knn_gather_wrapper(coordinate_tensor, knn_I)  # Bx3xMxK
+        # get gpu_id
+        device_index = x.device.index
+        if device_index is not None:
+            gpu_id = device_index
+        else:
+            gpu_id = -1
+        assert gpu_id >= 0
+        neighbors = operations.knn_gather_wrapper(coordinate_tensor, knn_I, gpu_id=gpu_id)  # Bx3xMxK
         if center_type == 'avg':
             neighbors_center = torch.mean(neighbors, dim=3, keepdim=True)  # Bx3xMx1
         elif center_type == 'center':
             neighbors_center = coordinate_tensor.unsqueeze(3)  # Bx3xMx1
-        neighbors_decentered = neighbors - neighbors_center
-        neighbors_decentered = Variable(neighbors_decentered, requires_grad=False)
-        neighbors_center = Variable(neighbors_center.squeeze(3), requires_grad=False)
+        neighbors_decentered = (neighbors - neighbors_center).detach()
+        neighbors_center = neighbors_center.squeeze(3).detach()
 
         # debug
         # print(neighbors[0, 0])
@@ -356,7 +362,7 @@ class KNNModule(nn.Module):
         # print(neighbors_decentered[0, 0])
         # assert False
 
-        x_neighbors = operations.knn_gather_by_indexing(x, Variable(knn_I, requires_grad=False))  # BxCxMxK
+        x_neighbors = operations.knn_gather_by_indexing(x, knn_I)  # BxCxMxK
         x_augmented = torch.cat((neighbors_decentered, x_neighbors), dim=1)  # Bx(3+C)xMxK
 
         for layer in self.layers:
@@ -375,9 +381,9 @@ class PointNet(nn.Module):
         for i, c_out in enumerate(out_channels_list):
             if i != len(out_channels_list)-1:
                 self.layers.append(EquivariantLayer(previous_out_channels, c_out, activation, normalization,
-                                                    momentum, bn_momentum_decay_step, bn_momentum_decay).cuda())
+                                                    momentum, bn_momentum_decay_step, bn_momentum_decay))
             else:
-                self.layers.append(EquivariantLayer(previous_out_channels, c_out, None, None).cuda())
+                self.layers.append(EquivariantLayer(previous_out_channels, c_out, None, None))
             previous_out_channels = c_out
 
     def forward(self, x, epoch=None):
@@ -410,9 +416,9 @@ class PointResNet(nn.Module):
         for i, c_out in enumerate(out_channels_list):
             if i != len(out_channels_list)-1:
                 self.layers.append(EquivariantLayer(previous_out_channels, c_out, activation, normalization,
-                                                    momentum, bn_momentum_decay_step, bn_momentum_decay).cuda())
+                                                    momentum, bn_momentum_decay_step, bn_momentum_decay))
             else:
-                self.layers.append(EquivariantLayer(previous_out_channels+out_channels_list[0], c_out, None, None).cuda())
+                self.layers.append(EquivariantLayer(previous_out_channels+out_channels_list[0], c_out, None, None))
             previous_out_channels = c_out
 
     def forward(self, x, epoch=None):
