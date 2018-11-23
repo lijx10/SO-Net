@@ -119,7 +119,7 @@ class Model():
 
         return OrderedDict([
             ('train_loss', self.loss.item()),
-            ('train_accuracy', train_accuracy),
+            ('train_accuracy', train_accuracy.item()),
             ('test_loss', self.test_loss.item()),
             ('test_accuracy', self.test_accuracy.item())
         ])

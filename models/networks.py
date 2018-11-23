@@ -179,7 +179,7 @@ class Encoder(nn.Module):
             self.first_pn_out = self.first_pointnet(self.x_decentered, epoch)
 
         gather_index = self.masked_max.compute(self.first_pn_out.data, min_idx, mask).detach()
-        self.first_pn_out_masked_max = self.first_pn_out.gather(dim=2, index=gather_index * mask_row_max.unsqueeze(1).long())  # BxCxM
+        self.first_pn_out_masked_max = self.first_pn_out.gather(dim=2, index=gather_index) * mask_row_max.unsqueeze(1).float()  # BxCxM
 
         if self.opt.som_k >= 2:
             # second pointnet, knn search on SOM nodes: ----------------------------------
