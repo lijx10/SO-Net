@@ -3,7 +3,6 @@ import os
 from util import util
 import torch
 
-from numba import cuda
 
 class Options():
     def __init__(self):
@@ -11,10 +10,10 @@ class Options():
         self.initialized = False
 
     def initialize(self):
-        self.parser.add_argument('--gpu_id', type=int, default=0, help='gpu id: e.g. 0, 1, 2. -1 is no GPU')
+        self.parser.add_argument('--gpu_id', type=int, default=1, help='gpu id: e.g. 0, 1, 2. -1 is no GPU')
 
         self.parser.add_argument('--dataset', type=str, default='modelnet', help='modelnet / shrec / shapenet')
-        self.parser.add_argument('--dataroot', default='/ssd/dataset/modelnet40-normal_numpy/', help='path to images & laser point clouds')
+        self.parser.add_argument('--dataroot', default='/ssd/jiaxin/datasets/modelnet40-normal_numpy/', help='path to images & laser point clouds')
         self.parser.add_argument('--classes', type=int, default=10, help='ModelNet40 or ModelNet10')
         self.parser.add_argument('--name', type=str, default='train', help='name of the experiment. It decides where to store samples and models')
         self.parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
@@ -59,7 +58,6 @@ class Options():
         self.opt = self.parser.parse_args()
 
         self.opt.device = torch.device("cuda:%d"%(self.opt.gpu_id) if torch.cuda.is_available() else "cpu")
-        cuda.select_device(self.opt.gpu_id)
         # torch.cuda.set_device(self.opt.gpu_id)
 
         args = vars(self.opt)

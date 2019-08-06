@@ -16,7 +16,7 @@ class Swish(nn.Module):
         super(Swish, self).__init__()
 
     def forward(self, x):
-        return 1.78718727865 * (x * torch.sigmoid(x) - 0.20662096414)
+        return x * torch.sigmoid(x)
 
 
 class MyBatchNorm1d(_BatchNorm):
@@ -343,12 +343,7 @@ class KNNModule(nn.Module):
 
         # get gpu_id
         device_index = x.device.index
-        if device_index is not None:
-            gpu_id = device_index
-        else:
-            gpu_id = -1
-        assert gpu_id >= 0
-        neighbors = operations.knn_gather_wrapper(coordinate_tensor, knn_I, gpu_id=gpu_id)  # Bx3xMxK
+        neighbors = operations.knn_gather_wrapper(coordinate_tensor, knn_I)  # Bx3xMxK
         if center_type == 'avg':
             neighbors_center = torch.mean(neighbors, dim=3, keepdim=True)  # Bx3xMx1
         elif center_type == 'center':

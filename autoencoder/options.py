@@ -3,7 +3,6 @@ import os
 from util import util
 import torch
 
-from numba import cuda
 
 class Options():
     def __init__(self):
@@ -56,7 +55,6 @@ class Options():
         self.opt = self.parser.parse_args()
 
         self.opt.device = torch.device("cuda:%d" % (self.opt.gpu_id) if torch.cuda.is_available() else "cpu")
-        cuda.select_device(self.opt.gpu_id)
         # torch.cuda.set_device(self.opt.gpu_id)
 
         args = vars(self.opt)

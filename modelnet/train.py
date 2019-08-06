@@ -3,7 +3,7 @@ import copy
 import numpy as np
 import math
 
-from options import Options
+from modelnet.options import Options
 opt = Options().parse()  # set CUDA_VISIBLE_DEVICES before import torch
 
 import torch

@@ -27,23 +27,18 @@ This repository releases codes of 4 applications:
 ## Installation
 Requirements:
 - Python 3
-- [PyTorch 0.4](http://pytorch.org/)
+- [PyTorch 0.4 or higher](http://pytorch.org/)
 - [Faiss](https://github.com/facebookresearch/faiss)
 - [visdom](https://github.com/facebookresearch/visdom)
+- Compile customized cuda code:
+```
+cd models/index_max_ext
+python3 setup.py install
+```
 
 Optional dependency:
  - Faiss [GPU support](https://github.com/facebookresearch/faiss/blob/master/INSTALL.md) - required by auto-encoder
- - [numba](https://numba.pydata.org/) - required by 3-layer SO-Net and accelerated kNN search. A summary of installing/using numba without conda:
- 1\. [Install llvm-6.0]([https://askubuntu.com/questions/905205/installing-clang-5-0-and-using-c17](https://askubuntu.com/questions/905205/installing-clang-5-0-and-using-c17))
- 2\. Build and install [llvmlite]([https://pypi.python.org/pypi/numba](https://pypi.python.org/pypi/numba))
- 3\. `sudo pip3 install numba`
- 4\. Set environment variables, example:
-```
-export LLVM_CONFIG=/usr/lib/llvm-6.0/bin/llvm-config  
-export NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
-export NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice
-```
-
+ 
 ## Dataset
 For [ModelNet40/10](https://1drv.ms/u/s!ApbTjxa06z9CgQfKl99yUDHL_wHs) and [ShapeNetPart](https://1drv.ms/u/s!ApbTjxa06z9CgQnl-Qm6KI3Ywbe1), we use the pre-processed dataset provided by [PointNet++](https://github.com/charlesq34/pointnet2) of Charles R. Qi. For SHREC2016, we sampled points uniformly from the original `*.obj` files. Matlab codes that perform sampling is provided in `data/`.
 
@@ -92,8 +87,3 @@ python3 train.py
 
 ## License
 This repository is released under MIT License (see LICENSE file for details).
-
-## TODO
-- [] Optional dependency for numba
-- [] On-the-fly point sampling from meshes
-- [] Upload prepared datasets

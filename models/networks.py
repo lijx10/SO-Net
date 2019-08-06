@@ -14,6 +14,8 @@ from .layers import *
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+import index_max
+
 
 class Transformer(nn.Module):
     def __init__(self, opt):
@@ -103,9 +105,6 @@ class Encoder(nn.Module):
         cols = rows
         self.som_builder = som.BatchSOM(rows, cols, 3, self.opt.gpu_id, self.opt.batch_size)
 
-        # masked max
-        self.masked_max = operations.MaskedMax(self.opt.node_num, gpu_id=self.opt.gpu_id)
-
         # padding
         self.zero_pad = torch.nn.ZeroPad2d(padding=1)
 
@@ -178,8 +177,12 @@ class Encoder(nn.Module):
         else:
             self.first_pn_out = self.first_pointnet(self.x_decentered, epoch)
 
-        gather_index = self.masked_max.compute(self.first_pn_out.data, min_idx, mask).detach()
-        self.first_pn_out_masked_max = self.first_pn_out.gather(dim=2, index=gather_index) * mask_row_max.unsqueeze(1).float()  # BxCxM
+        M = node.size()[2]
+        with torch.cuda.device(self.first_pn_out.get_device()):
+            gather_index = index_max.forward_cuda(self.first_pn_out.detach(),
+                                                  min_idx.int(),
+                                                  M).detach().long()
+        self.first_pn_out_masked_max = self.first_pn_out.gather(dim=2, index=gather_index * mask_row_max.unsqueeze(1).long())  # BxCxM
 
         if self.opt.som_k >= 2:
             # second pointnet, knn search on SOM nodes: ----------------------------------
