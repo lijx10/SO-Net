@@ -69,8 +69,8 @@ at::Tensor index_max_forward_cuda(const at::Tensor data, const at::Tensor index,
 	int N = data.size(2);
 
 	auto device_idx = data.device().index();
-	auto max_idx = at::zeros({B, C, K}, at::TensorOptions().dtype(at::kInt).device({at::kCUDA, device_idx}));
-	auto max_val = at::ones({B, C, K}, at::TensorOptions().dtype(at::kFloat).device({at::kCUDA, device_idx})) * -1000.0;
+	auto max_idx = at::zeros({B, C, K}, at::TensorOptions().dtype(at::kInt).device(at::kCUDA, device_idx));
+	auto max_val = at::ones({B, C, K}, at::TensorOptions().dtype(at::kFloat).device(at::kCUDA, device_idx)) * -1000.0;
 
 	index_max_forward_cuda_kernel<<<C, B>>>(data.data<float>(),
 			index.data<int>(),
@@ -87,8 +87,8 @@ at::Tensor index_max_forward_cuda_shared_mem(const at::Tensor data, const at::Te
 	int N = data.size(2);
 
 	auto device_idx = data.device().index();
-	auto max_idx = at::zeros({B, C, K}, at::TensorOptions().dtype(at::kInt).device({at::kCUDA, device_idx}));
-	auto max_val = at::ones({B, C, K}, at::TensorOptions().dtype(at::kFloat).device({at::kCUDA, device_idx})) * -1000.0;
+	auto max_idx = at::zeros({B, C, K}, at::TensorOptions({at::kCUDA, device_idx}).dtype(at::kInt));
+	auto max_val = at::ones({B, C, K}, at::TensorOptions({at::kCUDA, device_idx}).dtype(at::kFloat)) * -1000.0;
 
 	index_max_forward_cuda_kernel_shared_mem<<<C, B, B*K*sizeof(float)>>>(data.data<float>(),
 			index.data<int>(),
