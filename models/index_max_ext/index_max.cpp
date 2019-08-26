@@ -1,14 +1,14 @@
-#include <torch/torch.h>
+#include <torch/extension.h>
 
 #include <iostream>
 #include <vector>
 #include <thread>
 
 // cpu operations -------------------------------
-void max_forward_worker(at::TensorAccessor<float, 3>* p_data_a,
-		at::TensorAccessor<int, 2>* p_index_a,
-		at::TensorAccessor<int, 3>* p_max_idx_a,
-		at::TensorAccessor<float, 3>* p_max_val_a,
+void max_forward_worker(torch::TensorAccessor<float, 3>* p_data_a,
+                torch::TensorAccessor<int, 2>* p_index_a,
+                torch::TensorAccessor<int, 3>* p_max_idx_a,
+                torch::TensorAccessor<float, 3>* p_max_val_a,
 		int c_begin, int c_end) {
 	int B = p_data_a->size(0);
 	// int C = p_data_a->size(1);
@@ -30,20 +30,20 @@ void max_forward_worker(at::TensorAccessor<float, 3>* p_data_a,
 	}
 }
 
-torch::autograd::Variable index_max_forward_pthread_cpu(const torch::autograd::Variable data,
-		const torch::autograd::Variable index,
+torch::Tensor index_max_forward_pthread_cpu(const torch::Tensor data,
+                const torch::Tensor index,
 		const int K,
 		const int thread_num) {
 	int B = data.size(0);
 	int C = data.size(1);
 	// int N = data.size(2);
 
-	auto max_idx = at::zeros({B, C, K}, at::kInt);
-	auto max_val = at::ones({B, C, K}, at::kFloat) * -1000.0;
+        auto max_idx = torch::zeros({B, C, K}, torch::TensorOptions().dtype(torch::kInt32));
+        auto max_val = torch::ones({B, C, K}, torch::TensorOptions().dtype(torch::kFloat32)) * -1000.0;
 
 	// use accessor
-	auto data_a = data.data().accessor<float, 3>();
-	auto index_a = index.data().accessor<int, 2>();
+        auto data_a = data.accessor<float, 3>();
+        auto index_a = index.accessor<int, 2>();
 	auto max_idx_a = max_idx.accessor<int, 3>();
 	auto max_val_a = max_val.accessor<float, 3>();
 
@@ -66,21 +66,19 @@ torch::autograd::Variable index_max_forward_pthread_cpu(const torch::autograd::V
 		thread_pool[t].join();
 	}
 
-	return torch::autograd::make_variable(max_idx, false);
+        return max_idx;
 }
 
 
-// as of 1.0.0a0+9c49bb9, tensors, either deteched or not, are converted to variable in cpp.
-// DO NOT use at::Tensor to declare the function parameters if they are converted from python tensor.
-torch::autograd::Variable index_max_forward_cpu(const torch::autograd::Variable data,
-		const torch::autograd::Variable index,
+torch::Tensor index_max_forward_cpu(const torch::Tensor data,
+                const torch::Tensor index,
 		const int K) {
 	int B = data.size(0);
 	int C = data.size(1);
 	int N = data.size(2);
 
-	at::Tensor max_idx = at::zeros({B, C, K}, at::dtype(at::kInt).requires_grad(false));
-	at::Tensor max_val = at::ones({B, C, K}, at::kFloat) * -1000.0;
+        torch::Tensor max_idx = torch::zeros({B, C, K}, torch::TensorOptions().dtype(torch::kInt32).requires_grad(false));
+        torch::Tensor max_val = torch::ones({B, C, K}, torch::TensorOptions().dtype(torch::kFloat32)) * -1000.0;
 
 	// conversion between tensor and variable
 //	std::cout<<max_idx.type()<<std::endl;
@@ -90,11 +88,11 @@ torch::autograd::Variable index_max_forward_cpu(const torch::autograd::Variable 
 //	std::cout<<torch::autograd::make_variable(data.data(), false).type()<<std::endl;
 //	std::cout<<torch::autograd::make_variable(data.data(), false).data().type()<<std::endl;
 
-	// use accessor
-	auto data_a = data.data().accessor<float, 3>();
-	auto index_a = index.data().accessor<int, 2>();
-	auto max_idx_a = max_idx.accessor<int, 3>();
-	auto max_val_a = max_val.accessor<float, 3>();
+        // use accessor
+        auto data_a = data.accessor<float, 3>();
+        auto index_a = index.accessor<int, 2>();
+        auto max_idx_a = max_idx.accessor<int, 3>();
+        auto max_val_a = max_val.accessor<float, 3>();
 
 	// single thread for loop
 	for (int b=0; b<B; ++b) {
@@ -110,7 +108,7 @@ torch::autograd::Variable index_max_forward_cpu(const torch::autograd::Variable 
 		}
 	}
 
-	return torch::autograd::make_variable(max_idx, false);
+        return max_idx;
 }
 // cpu operations -------------------------------
 
@@ -123,30 +121,30 @@ torch::autograd::Variable index_max_forward_cpu(const torch::autograd::Variable 
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
 // declare the functions in .cu file
-at::Tensor index_max_forward_cuda(const at::Tensor data,
-		const at::Tensor index,
+torch::Tensor index_max_forward_cuda(const torch::Tensor data,
+                const torch::Tensor index,
 		const int K);
 
-at::Tensor index_max_forward_cuda_shared_mem(const at::Tensor data,
-		const at::Tensor index,
+torch::Tensor index_max_forward_cuda_shared_mem(const torch::Tensor data,
+                const torch::Tensor index,
 		const int K);
 
-torch::autograd::Variable index_max_forward_cuda_wrapper(const torch::autograd::Variable data,
-		const torch::autograd::Variable index,
+torch::Tensor index_max_forward_cuda_wrapper(const torch::Tensor data,
+                const torch::Tensor index,
 		const int K){
 	CHECK_INPUT(data);
 	CHECK_INPUT(index);
 
-	return torch::autograd::make_variable(index_max_forward_cuda(data.data(), index.data(), K), false);
+        return index_max_forward_cuda(data, index, K);
 }
 
-torch::autograd::Variable index_max_forward_cuda_wrapper_shared_mem(const torch::autograd::Variable data,
-		const torch::autograd::Variable index,
+torch::Tensor index_max_forward_cuda_wrapper_shared_mem(const torch::Tensor data,
+                const torch::Tensor index,
 		const int K){
 	CHECK_INPUT(data);
 	CHECK_INPUT(index);
 
-	return torch::autograd::make_variable(index_max_forward_cuda_shared_mem(data.data(), index.data(), K), false);
+        return index_max_forward_cuda_shared_mem(data, index, K);
 }
 // cuda operations ------------------------------
 
@@ -156,6 +154,6 @@ torch::autograd::Variable index_max_forward_cuda_wrapper_shared_mem(const torch:
 PYBIND11_MODULE(index_max, m) {
 	m.def("forward_cpu", &index_max_forward_cpu, "CPU single thread");
 	m.def("forward_multi_thread_cpu", &index_max_forward_pthread_cpu, "CPU multi-thread");
-	m.def("forward_cuda", &index_max_forward_cuda_wrapper, "CUDA code without shared memory");
-	m.def("forward_cuda_shared_mem", &index_max_forward_cuda_wrapper_shared_mem, "CUDA code with shared memory");
+        m.def("forward_cuda", &index_max_forward_cuda_wrapper, "CUDA code without shared memory");
+        m.def("forward_cuda_shared_mem", &index_max_forward_cuda_wrapper_shared_mem, "CUDA code with shared memory");
 }

@@ -1,5 +1,5 @@
 #include <ATen/ATen.h>
-//#include <torch/extension.h>
+#include <torch/extension.h>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -63,14 +63,14 @@ __global__ void index_max_forward_cuda_kernel_shared_mem(const float* __restrict
 
 
 
-at::Tensor index_max_forward_cuda(const at::Tensor data, const at::Tensor index, const int K){
+torch::Tensor index_max_forward_cuda(const torch::Tensor data, const torch::Tensor index, const int K){
 	int B = data.size(0);
 	int C = data.size(1);
 	int N = data.size(2);
 
 	auto device_idx = data.device().index();
-	auto max_idx = at::zeros({B, C, K}, at::TensorOptions().dtype(at::kInt).device(at::kCUDA, device_idx));
-	auto max_val = at::ones({B, C, K}, at::TensorOptions().dtype(at::kFloat).device(at::kCUDA, device_idx)) * -1000.0;
+        auto max_idx = torch::zeros({B, C, K}, torch::TensorOptions().dtype(torch::kInt32).device(torch::kCUDA, device_idx));
+        auto max_val = torch::ones({B, C, K}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA, device_idx)) * -1000.0;
 
 	index_max_forward_cuda_kernel<<<C, B>>>(data.data<float>(),
 			index.data<int>(),
@@ -81,14 +81,14 @@ at::Tensor index_max_forward_cuda(const at::Tensor data, const at::Tensor index,
 	return max_idx;
 }
 
-at::Tensor index_max_forward_cuda_shared_mem(const at::Tensor data, const at::Tensor index, const int K){
+torch::Tensor index_max_forward_cuda_shared_mem(const torch::Tensor data, const torch::Tensor index, const int K){
 	int B = data.size(0);
 	int C = data.size(1);
 	int N = data.size(2);
 
 	auto device_idx = data.device().index();
-	auto max_idx = at::zeros({B, C, K}, at::TensorOptions({at::kCUDA, device_idx}).dtype(at::kInt));
-	auto max_val = at::ones({B, C, K}, at::TensorOptions({at::kCUDA, device_idx}).dtype(at::kFloat)) * -1000.0;
+        auto max_idx = torch::zeros({B, C, K}, torch::TensorOptions({torch::kCUDA, device_idx}).dtype(torch::kInt32));
+        auto max_val = torch::ones({B, C, K}, torch::TensorOptions({torch::kCUDA, device_idx}).dtype(torch::kFloat32)) * -1000.0;
 
 	index_max_forward_cuda_kernel_shared_mem<<<C, B, B*K*sizeof(float)>>>(data.data<float>(),
 			index.data<int>(),
