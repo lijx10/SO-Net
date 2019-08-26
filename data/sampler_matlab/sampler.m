@@ -27,10 +27,12 @@ pc_normal = normals(sampled_tri_idx, :); % Nx3
 
 %% sample points
 u = rand(N, 1); % Nx1
-v = rand(N, 1) .* (1-u); % Nx1
-w = 1-u-v; % Nx1
+v = rand(N, 1);
+invalid = u + v > 1
+u(invalid) = 1 - u(invalid)
+v(invalid) = 1 - v(invalid)
 
-pc = u .* sampled_a + v .* sampled_b + w .* sampled_c;
+pc = sampled_a + u .* sampled_b + v .* sampled_c;
 
 end
 
