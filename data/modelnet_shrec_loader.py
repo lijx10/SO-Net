@@ -265,7 +265,10 @@ class ModelNet_Shrec_Loader(data.Dataset):
         # print(I)
         # assert False
 
-        return pc, surface_normal, class_id, som_node, som_knn_I
+        if self.opt.dataset == 'shrec':
+            return pc, surface_normal, class_id, som_node, som_knn_I, index
+        else:
+            return pc, surface_normal, class_id, som_node, som_knn_I
 
 
 if __name__=="__main__":

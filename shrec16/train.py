@@ -3,7 +3,7 @@ import copy
 import numpy as np
 import math
 
-from options import Options
+from shrec16.options import Options
 opt = Options().parse()  # set CUDA_VISIBLE_DEVICES before import torch
 
 import torch
@@ -95,7 +95,7 @@ if __name__=='__main__':
             print('Tested network. So far best: %f' % (best_accuracy) )
 
             # save network
-            saving_acc_threshold = 0.89
+            saving_acc_threshold = 0.0
             if model.test_accuracy.item() > saving_acc_threshold:
                 print("Saving network...")
                 model.save_network(model.encoder, 'encoder', '%d_%f' % (epoch, model.test_accuracy.item()), opt.gpu_id)

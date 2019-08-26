@@ -13,7 +13,7 @@ class Options():
         self.parser.add_argument('--gpu_id', type=int, default=0, help='gpu id: e.g. 0, 1, 2. -1 is no GPU')
 
         self.parser.add_argument('--dataset', type=str, default='shrec', help='modelnet / shrec')
-        self.parser.add_argument('--dataroot', default='/ssd/dataset/SHREC2016/', help='path to images & laser point clouds')
+        self.parser.add_argument('--dataroot', default='/ssd/jiaxin/datasets/SHREC2016/', help='path to images & laser point clouds')
         self.parser.add_argument('--classes', type=int, default=55, help='ModelNet40 or ModelNet10')
         self.parser.add_argument('--name', type=str, default='train', help='name of the experiment. It decides where to store samples and models')
         self.parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
@@ -44,6 +44,11 @@ class Options():
         self.parser.add_argument('--bn_momentum', type=float, default=0.1, help='normalization momentum, typically 0.1. Equal to (1-m) in TF')
         self.parser.add_argument('--bn_momentum_decay_step', type=int, default=None, help='BN momentum decay step. e.g, 0.5->0.01.')
         self.parser.add_argument('--bn_momentum_decay', type=float, default=0.6, help='BN momentum decay step. e.g, 0.5->0.01.')
+
+        self.parser.add_argument('--rot_horizontal', type=bool, default=False, help='Rotation augmentation around vertical axis.')
+        self.parser.add_argument('--rot_perturbation', type=bool, default=False, help='Small rotation augmentation around 3 axis.')
+        self.parser.add_argument('--translation_perturbation', type=bool, default=False, help='Small translation augmentation around 3 axis.')
+
 
 
         self.initialized = True

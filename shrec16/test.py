@@ -3,12 +3,8 @@ import copy
 import numpy as np
 import math
 
-from options.base_options import BaseOptions
-opt = BaseOptions().parse()  # set CUDA_VISIBLE_DEVICES before import torch
-
-opt_test = copy.deepcopy(opt)
-opt_test.name = 'test'
-opt_test.display_id = opt.display_id + 100
+from shrec16.options import Options
+opt = Options().parse()  # set CUDA_VISIBLE_DEVICES before import torch
 
 import torch
 import torchvision
@@ -21,19 +17,19 @@ import numpy as np
 import os
 
 from models.classifier import Model
-from data.shrec2016_loader import SHREC2016Loader
+from data.modelnet_shrec_loader import ModelNet_Shrec_Loader
 from util.visualizer import Visualizer
 
 
 if __name__=='__main__':
-    testset = SHREC2016Loader(opt.dataroot, opt, 'test')
+    testset = ModelNet_Shrec_Loader(opt.dataroot, 'test', opt)
     testloader = torch.utils.data.DataLoader(testset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.nThreads)
     print('#testing point clouds = %d' % len(testset))
 
     # create model, optionally load pre-trained model
     model = Model(opt)
-    model.encoder.load_state_dict(torch.load('/ssd/pc-cls/checkpoints/save/SHREC2016/net_encoder.pth'))
-    model.classifier.load_state_dict(torch.load('/ssd/pc-cls/checkpoints/save/SHREC2016/net_classifier.pth'))
+    model.encoder.load_state_dict(torch.load('/ssd/jiaxin/SO-Net/shrec16/checkpoints/0_0.748621_net_encoder.pth'))
+    model.classifier.load_state_dict(torch.load('/ssd/jiaxin/SO-Net/shrec16/checkpoints/0_0.748621_net_classifier.pth'))
     output_folder = '/ssd/tmp/retrieval'
 
     model.encoder.eval()
@@ -47,8 +43,9 @@ if __name__=='__main__':
     predicted_labels = torch.LongTensor(len(testset)).cuda().zero_()  # N
     model_name_ids = torch.LongTensor(len(testset)).cuda().zero_()  # N
     for i, data in enumerate(testloader):
-        input_pc, input_sn, input_model_name_id, input_node = data
-        model.set_input(input_pc, input_sn, input_model_name_id, input_node)
+        input_pc, input_sn, input_label, input_node, input_node_knn_I, input_model_name_id = data
+        # input_pc, input_sn, input_model_name_id, input_node = data
+        model.set_input(input_pc, input_sn, input_model_name_id, input_node,input_node_knn_I)
         model.forward()
 
         batch_size = input_model_name_id.size()[0]
