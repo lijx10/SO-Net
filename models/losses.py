@@ -99,8 +99,8 @@ def compute_iou_np_array(score, seg, label, visualizer, opt, input_pc):
             gt = seg[i] == part
             predict = seg_predicted[i] == part
 
-            intersection = (gt + predict) == 2
-            union = (gt + predict) >= 1
+            intersection = (gt.int() + predict.int()) == 2
+            union = (gt.int() + predict.int()) >= 1
 
             if union.sum() == 0:
                 iou_part = 1.0
@@ -152,8 +152,8 @@ def compute_iou(score, seg, label, visualizer, opt, input_pc):
             gt = seg[i] == part
             predict = seg_predicted[i] == part
 
-            intersection = (gt + predict) == 2
-            union = (gt + predict) >= 1
+            intersection = (gt.int() + predict.int()) == 2
+            union = (gt.int() + predict.int()) >= 1
 
             # print(intersection)
             # print(union)
